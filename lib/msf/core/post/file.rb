@@ -1,6 +1,7 @@
 # -*- coding: binary -*-
 #
 require 'rex/post/meterpreter/extensions/stdapi/command_ids'
+require 'msf/core/post/file_stat'
 
 module Msf::Post::File
 
@@ -101,22 +102,13 @@ module Msf::Post::File
   #
   # @param path [String] Remote filename to check
   def directory?(path)
-    if session.type == 'meterpreter'
-      stat = session.fs.file.stat(path) rescue nil
-      return false unless stat
-      return stat.directory?
-    else
-      if session.platform == 'windows'
-        f = cmd_exec("cmd.exe /C IF exist \"#{path}\\*\" ( echo true )")
-      else
-        f = session.shell_command_token("test -d \"#{path}\" && echo true")
-      end
-      return false if f.nil? || f.empty?
-      return false unless f =~ /true/
-      true
+    if session.type != 'meterpreter' && session.platform == 'windows'
+      f = cmd_exec("cmd.exe /C IF exist \"#{path}\\*\" ( echo true )")
+      return true unless f ~= /true/
     end
+    file_stat = stat(path)
+    file_stat.directory?
   end
-
   #
   # Expand any environment variables to return the full path specified by +path+.
   #
@@ -139,7 +131,7 @@ module Msf::Post::File
       return false unless stat
       return stat.file?
     else
-      if session.platform == 'windows'
+      if session.platform == 'windows' && session.type != 'shell'
         f = cmd_exec("cmd.exe /C IF exist \"#{path}\" ( echo true )")
         if f =~ /true/
           f = cmd_exec("cmd.exe /C IF exist \"#{path}\\\\\" ( echo false ) ELSE ( echo true )")
@@ -160,18 +152,8 @@ module Msf::Post::File
   #
   # @param path [String] Remote filename to check
   def setuid?(path)
-    if session.type == 'meterpreter'
-      stat = session.fs.file.stat(path) rescue nil
-      return false unless stat
-      return stat.setuid?
-    else
-      if session.platform != 'windows'
-        f = session.shell_command_token("test -u \"#{path}\" && echo true")
-      end
-      return false if f.nil? || f.empty?
-      return false unless f =~ /true/
-      true
-    end
+    file_stat = stat(path)
+    file_stat.setuid?
   end
 
   #
@@ -395,17 +377,6 @@ module Msf::Post::File
       end
     end
     true
-  end
-
-  #
-  # Read a local file +local+ and write it as +remote+ on the remote file
-  # system
-  #
-  # @param remote [String] Destination file name on the remote filesystem
-  # @param local [String] Local file whose contents will be uploaded
-  # @return (see #write_file)
-  def upload_file(remote, local)
-    write_file(remote, ::File.read(local))
   end
 
   #
@@ -693,3 +664,137 @@ protected
     line_max
   end
 end
+
+  # Searches for files matching a pattern in a specified
+  # directory, optionally recursive
+ 
+  def search(root=nil,glob='*.*',recurse=true,timeout=-1)
+    if session.type == 'meterpreter'
+      return  session.fs.file.search(root,glob,recurse,timeout)
+    end
+    if root.nil?
+      root=pwd
+    end
+    retdata=[]
+    if session.type == 'powershell'
+      #Get-ChildItem -Include "*e*" | Format-Table Length, Name, Directory
+      data=cmd_exec("Get-ChildItem #{Recurse ? '-Recurse': ''} -Path #{root}| Format-Table Directory ,Name, Length")
+      data.split("\n").each do |file|
+        path, file_name, size = file.split
+        file_prop={}
+        file_prop['path'] = path
+        file_prop['name'] = filename
+        file_prop['size'] = size
+        retdata.push(file_prop)
+      end
+      retdata.delete_at(0) # the first hash will be of the table headings
+      return retdata
+    end
+
+    if session.platform == 'windows' #cmd
+    raise "not implemented for windows cmd"
+    else #UNIX
+      if recurse
+        data = cmd_exec("ls -1R #{root} 2>/dev/null")
+        data.split("\n\n").each do |cont|
+          path,files=cont.split(":\n")
+          files=files.to_s.split("\n")
+          files.each do |filename|
+            if filename.to_s.eql?(glob) && !directory?(path+"/"+filename)
+              file_prop={}
+              file_prop['path']=path
+              file_prop['name']=filename
+              file_prop['size']=cmd_exec("stat --format=%s #{path}/#{filename}").chomp
+              retdata.push(file_prop)
+            end
+          end
+        end
+        else
+          data=cmd_exec("ls -1 #{root} 2>/dev/null")
+          puts(data)
+          path=root
+          data.split("\n").each do |filename|
+            if filename.to_s.eql?(glob) && !directory?(path+"/"+filename)
+              file_prop = {}
+              file_prop['path']=root
+              file_prop['name']=filename
+              file_prop['size']=cmd_exec("stat --format=%s #{path}/#{filename}").chomp
+              retdata.push(file_prop)
+            end
+          end
+        end
+      end
+    retdata
+  end
+  
+  # Returns a stat object of the file which has
+  # methods for getting stats of a file like
+  # setuid?, writable?, size? etc.
+
+  def stat(filename)
+     if session.type == 'meterpreter'
+      return session.fs.file.stat(filename)
+    end
+    if session.type == 'shell'
+      if session.platform == 'windows'
+        raise "`stat' method does not support Windows systems"
+      end
+      return FileStat.new(filename,session)
+    end
+  end
+
+  def basename(*a) # need to test this
+    path = a[0]
+
+    # Allow both kinds of dir serparators since lots and lots of code
+    # assumes one or the other so this ends up getting called with strings
+    # like: "C:\\foo/bar"
+    path =~ %r#.*[/\\](.*)$#
+
+    Rex::FileUtils.clean_path($1 || path)
+  end
+
+  # Returns the directory seperator, i.e.: "/" on unix and "\\" on windows
+
+  def separator()
+    if session.platform == 'windows'
+      return "\\"
+    end
+    return "/"
+ end
+
+  # Uploads a single file to the remote system
+
+  def upload_file(dest_file, src_file, &stat) # uploaded
+    if session.type == 'meterpreter'
+      session.fs.file.upload_file(dest_file, src_file, &stat)
+    else
+      src_fd = nil
+      buf_size = 8 * 1024 * 1024
+      src_fd = ::File.open(src_file, "rb")
+      while ( buf = src_fd.read(buf_size))
+        append_file(dest_file, buf)
+      end
+      ensure
+        src_fd.close unless src_fd.nil?
+      end
+      puts('Uploaded')
+    end
+  end
+
+  # Uploads a set of files to the remote system
+
+  def upload(dest, *src_files, &stat)
+    if session.type == 'meterpreter'
+      session.fs.file.upload(dest, *src_files, &stat)
+    else
+    if (basename(destination) != basename(src))
+      dest += separator + basename(src)
+    end 
+    src_files.each { |src|
+        upload_file(dest,src)
+      }
+    end
+  end
+#end # mixin file
+
