@@ -169,15 +169,20 @@ class Msf::Ui::Console::CommandDispatcher::Developer
     end
 
     print_status('Starting Pry shell...')
-
+    Pry.config.history_load = false
+    histfile = Msf::Config.pry_history
     unless active_module
       print_status("You are in the \"framework\" object\n")
+      Msf::Ui::Console::HistoryManager.push_context(histfile)
       framework.pry
+      Msf::Ui::Console::HistoryManager.pop_context
       return
     end
 
     print_status("You are in #{active_module.fullname}\n")
+    Msf::Ui::Console::HistoryManager.push_context(histfile)
     active_module.pry
+    Msf::Ui::Console::HistoryManager.pop_context
   end
 
   def cmd_edit_help
