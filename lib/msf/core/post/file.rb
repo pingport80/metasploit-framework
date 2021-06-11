@@ -510,9 +510,10 @@ module Msf::Post::File
       return (session.fs.file.mv(old_file, new_file).result == 0)
     else
       if session.platform == 'windows'
-        cmd_exec(%Q|move /y "#{old_file}" "#{new_file}"|) =~ /moved/
+        raise "File to be renamed doesn't exists" unless exist?(old_file)
+        !!(cmd_exec(%Q|move /y "#{old_file}" "#{new_file}" & if not errorlevel 1 echo true|) =~ /true/)
       else
-        cmd_exec(%Q|mv -f "#{old_file}" "#{new_file}"|).empty?
+        cmd_exec(%Q|mv -f "#{old_file}" "#{new_file}" && echo true|).include?('true')
       end
     end
   end
