@@ -506,12 +506,12 @@ module Msf::Post::File
   # @param old_file [String] Remote file name to move
   # @param new_file [String] The new name for the remote file
   def rename_file(old_file, new_file)
+    raise "File to be renamed doesn't exists" unless exist?(old_file)
     if session.type == "meterpreter"
       return (session.fs.file.mv(old_file, new_file).result == 0)
     elsif session.type == 'powershell'
       cmd_exec("Rename-Item -Path #{old_file} -NewName #{new_file}")
     elsif session.platform == 'windows'
-      raise "File to be renamed doesn't exists" unless exist?(old_file)
       !!(cmd_exec(%Q|move /y "#{old_file}" "#{new_file}" & if not errorlevel 1 echo true|) =~ /true/)
     else
       cmd_exec(%Q|mv -f "#{old_file}" "#{new_file}" && echo true|).strip == "true"
