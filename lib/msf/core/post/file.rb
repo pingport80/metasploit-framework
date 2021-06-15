@@ -507,11 +507,7 @@ module Msf::Post::File
   # @param old_file [String] Remote file name to move
   # @param new_file [String] The new name for the remote file
   def rename_file(old_file, new_file)
-    unless exist?(old_file)
-      elog("The file to be renamed does not exists!")
-      return false
-    end
-    verification_token = Rex::Text.rand_text_alphanumeric()
+    verification_token = Rex::Text.rand_text_alphanumeric(8)
     if session.type == "meterpreter"
       return (session.fs.file.mv(old_file, new_file).result == 0)
     elsif session.type == 'powershell'
@@ -519,7 +515,7 @@ module Msf::Post::File
     elsif session.platform == 'windows'
       !!(cmd_exec(%Q|move /y "#{old_file}" "#{new_file}" & if not errorlevel 1 echo #{verification_token}|) =~ /#{verification_token}/)
     else
-      !!cmd_exec(%Q|mv -f "#{old_file}" "#{new_file}" && echo #{verification_token}|).strip =~ /verification_token/
+      !!(cmd_exec(%Q|mv -f "#{old_file}" "#{new_file}" && echo #{verification_token}|).strip =~ /#{verification_token}/)
     end
   end
   alias :move_file :rename_file
