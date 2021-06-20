@@ -513,7 +513,8 @@ module Msf::Post::File
     elsif session.type == 'powershell'
       !!cmd_exec("Rename-Item -Path \"#{old_file}\" -NewName \"#{new_file}\" && echo #{verification_token}") =~ /#{verification_token}/
     elsif session.platform == 'windows'
-      !!(cmd_exec(%Q|move /y "#{old_file}" "#{new_file}" & if not errorlevel 1 echo #{verification_token}|) =~ /#{verification_token}/) if file?(old_file) # adding this because when the old file is not present it's hangs for a while, should be removed after this issue is fixed.
+      return false unless file?(old_file) # adding this because when the old_file is not present it hangs for a while, should be removed after this issue is fixed.
+      !!(cmd_exec(%Q|move /y "#{old_file}" "#{new_file}" & if not errorlevel 1 echo #{verification_token}|) =~ /#{verification_token}/)
     else
       !!(cmd_exec(%Q|mv -f "#{old_file}" "#{new_file}" && echo #{verification_token}|).strip =~ /#{verification_token}/)
     end
