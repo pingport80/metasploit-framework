@@ -59,6 +59,7 @@ module Msf::Post::File
         return session.shell_command_token("echo %CD%")
     else
       if command_exists?("pwd")
+        return session.shell_command_token("pwd").to_s.strip
       else
           # Result on systems without pwd command
         return session.shell_command_token("echo $PWD").to_s.strip
