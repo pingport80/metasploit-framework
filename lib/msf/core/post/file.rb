@@ -49,18 +49,19 @@ module Msf::Post::File
   def pwd
     if session.type == "meterpreter"
       return session.fs.dir.getwd
-    else
-      if session.platform == 'windows'
+   
+    elsif session.type == 'powershell'
+      return session.shell_command_token('(Get-Location).Path')
+
+    elsif session.platform == 'windows'
         # XXX: %CD% only exists on XP and newer, figure something out for NT4
         # and 2k
         return session.shell_command_token("echo %CD%")
+    else
+      if command_exists?("pwd")
       else
-        if command_exists?("pwd")
-          return session.shell_command_token("pwd").to_s.strip
-        else
           # Result on systems without pwd command
-          return session.shell_command_token("echo $PWD").to_s.strip
-        end
+        return session.shell_command_token("echo $PWD").to_s.strip
       end
     end
   end
