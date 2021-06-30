@@ -509,7 +509,11 @@ module Msf::Post::File
   def rename_file(old_file, new_file)
     verification_token = Rex::Text.rand_text_alphanumeric(8)
     if session.type == "meterpreter"
-      return (session.fs.file.mv(old_file, new_file).result == 0)
+      begin
+        return (session.fs.file.mv(old_file, new_file).result == 0)
+      rescue Rex::Post::Meterpreter::RequestError => e
+        return false
+      end
     elsif session.type == 'powershell'
       !!(cmd_exec("Move-Item \"#{old_file}\" \"#{new_file}\" -Force; if($?){echo #{verification_token}}") =~ /#{verification_token}/)
     elsif session.platform == 'windows'
