@@ -500,6 +500,20 @@ module Msf::Post::File
   alias :file_rm :rm_f
   alias :dir_rm :rm_rf
 
+  def separator
+    if session.platform == 'windows'
+      return '\\'
+    end
+    return '/'
+  end
+
+  def extract_filename(file)
+  	if session.platform == 'windows'
+  	  return file.match(/^([A-Z]:)?(\\)?(.+\\)*(.+)$/)[4]
+  	end
+  	file.match(/^\/(.+\/)*(.+)$/)[2]
+  end
+
   #
   # Renames a remote file and returns true on success and false
   # on failure
@@ -507,7 +521,13 @@ module Msf::Post::File
   # @param old_file [String] Remote file name to move
   # @param new_file [String] The new name for the remote file
   def rename_file(old_file, new_file)
+  	if directory?(new_file)
+  	  file_name = extract_filename(old_file)
+  	  new_file = new_file + separator + file_name
+  	end
     verification_token = Rex::Text.rand_text_alphanumeric(8)
+    if directory?(new_file)
+    end
     if session.type == "meterpreter"
       begin
         return (session.fs.file.mv(old_file, new_file).result == 0)
