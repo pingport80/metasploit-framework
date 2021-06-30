@@ -526,8 +526,6 @@ module Msf::Post::File
   	  new_file = new_file + separator + file_name
   	end
     verification_token = Rex::Text.rand_text_alphanumeric(8)
-    if directory?(new_file)
-    end
     if session.type == "meterpreter"
       begin
         return (session.fs.file.mv(old_file, new_file).result == 0)
