@@ -126,6 +126,8 @@ module Msf::Post::File
       stat = session.fs.file.stat(path) rescue nil
       return false unless stat
       return stat.directory?
+    elsif session.type == 'powershell'
+      return !!(cmd_exec("(Get-Item #{path}).PSIsContainer") =~ /True/)
     else
       if session.platform == 'windows'
         f = cmd_exec("cmd.exe /C IF exist \"#{path}\\*\" ( echo true )")
@@ -508,7 +510,7 @@ module Msf::Post::File
   end
 
   def extract_filename(file)
-  	if session.platform == 'windows'
+  	if session.platform.include? 'win'
   	  return file.match(/^([A-Z]:)?(\\)?(.+\\)*(.+)$/)[4]
   	end
   	file.match(/^\/(.+\/)*(.+)$/)[2]
