@@ -502,11 +502,11 @@ module Msf::Post::File
   alias :file_rm :rm_f
   alias :dir_rm :rm_rf
 
-  def separator
-    if session.platform == 'windows'
-      return '\\'
-    end
-    return '/'
+  def get_separator(file_path)
+    if file_path.include?('\\')
+      '\\'
+    else
+      '/'
   end
 
   def extract_filename(file)
